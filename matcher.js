@@ -33,6 +33,41 @@
         113:'الفلق',114:'الناس'
     };
 
+    // Vocalised surah names in the genitive, as they appear in printed
+    // references: [الفَاتِحَةِ: ٢]. Stripping the tashkeel yields SURAH_NAMES
+    // (except سَبَإٍ / النَّبَإِ, whose genitive hamza seat differs).
+    const SURAH_NAMES_TASHKEEL = {
+        1:'الفَاتِحَةِ',2:'البَقَرَةِ',3:'آلِ عِمْرَانَ',4:'النِّسَاءِ',
+        5:'المَائِدَةِ',6:'الأَنْعَامِ',7:'الأَعْرَافِ',8:'الأَنْفَالِ',
+        9:'التَّوْبَةِ',10:'يُونُسَ',11:'هُودٍ',12:'يُوسُفَ',
+        13:'الرَّعْدِ',14:'إِبْرَاهِيمَ',15:'الحِجْرِ',16:'النَّحْلِ',
+        17:'الإِسْرَاءِ',18:'الكَهْفِ',19:'مَرْيَمَ',20:'طه',
+        21:'الأَنْبِيَاءِ',22:'الحَجِّ',23:'المُؤْمِنُونَ',24:'النُّورِ',
+        25:'الفُرْقَانِ',26:'الشُّعَرَاءِ',27:'النَّمْلِ',28:'القَصَصِ',
+        29:'العَنْكَبُوتِ',30:'الرُّومِ',31:'لُقْمَانَ',32:'السَّجْدَةِ',
+        33:'الأَحْزَابِ',34:'سَبَإٍ',35:'فَاطِرٍ',36:'يس',
+        37:'الصَّافَّاتِ',38:'ص',39:'الزُّمَرِ',40:'غَافِرٍ',
+        41:'فُصِّلَتْ',42:'الشُّورَى',43:'الزُّخْرُفِ',44:'الدُّخَانِ',
+        45:'الجَاثِيَةِ',46:'الأَحْقَافِ',47:'مُحَمَّدٍ',48:'الفَتْحِ',
+        49:'الحُجُرَاتِ',50:'ق',51:'الذَّارِيَاتِ',52:'الطُّورِ',
+        53:'النَّجْمِ',54:'القَمَرِ',55:'الرَّحْمَنِ',56:'الوَاقِعَةِ',
+        57:'الحَدِيدِ',58:'المُجَادِلَةِ',59:'الحَشْرِ',60:'المُمْتَحَنَةِ',
+        61:'الصَّفِّ',62:'الجُمُعَةِ',63:'المُنَافِقُونَ',64:'التَّغَابُنِ',
+        65:'الطَّلَاقِ',66:'التَّحْرِيمِ',67:'المُلْكِ',68:'القَلَمِ',
+        69:'الحَاقَّةِ',70:'المَعَارِجِ',71:'نُوحٍ',72:'الجِنِّ',
+        73:'المُزَّمِّلِ',74:'المُدَّثِّرِ',75:'القِيَامَةِ',76:'الإِنْسَانِ',
+        77:'المُرْسَلَاتِ',78:'النَّبَإِ',79:'النَّازِعَاتِ',80:'عَبَسَ',
+        81:'التَّكْوِيرِ',82:'الانْفِطَارِ',83:'المُطَفِّفِينَ',84:'الانْشِقَاقِ',
+        85:'البُرُوجِ',86:'الطَّارِقِ',87:'الأَعْلَى',88:'الغَاشِيَةِ',
+        89:'الفَجْرِ',90:'البَلَدِ',91:'الشَّمْسِ',92:'اللَّيْلِ',
+        93:'الضُّحَى',94:'الشَّرْحِ',95:'التِّينِ',96:'العَلَقِ',
+        97:'القَدْرِ',98:'البَيِّنَةِ',99:'الزَّلْزَلَةِ',100:'العَادِيَاتِ',
+        101:'القَارِعَةِ',102:'التَّكَاثُرِ',103:'العَصْرِ',104:'الهُمَزَةِ',
+        105:'الفِيلِ',106:'قُرَيْشٍ',107:'المَاعُونِ',108:'الكَوْثَرِ',
+        109:'الكَافِرُونَ',110:'النَّصْرِ',111:'المَسَدِ',112:'الإِخْلَاصِ',
+        113:'الفَلَقِ',114:'النَّاسِ'
+    };
+
     QF.Matcher = {
         // ---- tunable thresholds -------------------------------------------
         MIN_FULL_CONFIDENCE: 75,
@@ -46,10 +81,17 @@
         MAX_VERSE_EDITS: 2,   // per-ayah budget (missing / extra / mistyped words)
         MAX_CHAIN_EDITS: 3,   // total budget across a multi-ayah run
         MIN_VERSE_WORDS: 2,   // never emit an ayah shorter than this (حم، الم، يس…)
+        // Reference style. RANGE_SEPARATOR joins the first and last ayah of a run
+        // ("٥٣-٥٤"); VOCALISED_NAMES prints [الفَاتِحَةِ: ٢] instead of [الفاتحة: ٢].
+        RANGE_SEPARATOR: '-',
+        VOCALISED_NAMES: true,
         SURAH_BONUS: 6,
         VERSE_NUMBER_RE: /[(\[]\s*[\d٠-٩]{1,3}\s*[)\]]/g,
         // An existing reference tag such as " [الفاتحة: ٢]" or " [النحل: ٥٣]"
-        REFERENCE_TAG_RE: /^[ \t]*\[[^\]\n]{1,40}\]/,
+        // An existing reference tag such as " [الفاتحة: ٢]" or, on its own line,
+        // "[سُورَةُ النَّحْلِ: ٥٣-٥٤]". Blank lines between the quote and the tag are
+        // allowed so an author's layout is absorbed rather than duplicated.
+        REFERENCE_TAG_RE: /^[ \t]*(?:\r?\n[ \t]*){0,2}\[[^\]\n]{1,60}\]/,
 
         // ===================================================================
         //  Entry point
@@ -99,9 +141,13 @@
                     // If the quote is already followed by a reference tag, absorb it so
                     // re-running the formatter replaces rather than duplicates it.
                     let end = candEnd;
-                    const tail = tafsirText.slice(candEnd, candEnd + 48);
+                    const tail = tafsirText.slice(candEnd, candEnd + 80);
                     const tagMatch = this.REFERENCE_TAG_RE.exec(tail);
-                    if (tagMatch) end = candEnd + tagMatch[0].length;
+                    // Only absorb a tag that really cites this passage, so an
+                    // unrelated bracket after the quote is never swallowed.
+                    if (tagMatch && this._tagCitesVerses(tagMatch[0], verses)) {
+                        end = candEnd + tagMatch[0].length;
+                    }
 
                     const original = tafsirText.substring(cand.start, end);
                     if (formatted === original) continue; // nothing to change
@@ -113,7 +159,7 @@
                         formatted,
                         confidence: this._avgConfidence(verses),
                         surahNum: verses[0].surahNum,
-                        surahName: this.getSurahName(verses[0].surahNum),
+                        surahName: this.getPlainSurahName(verses[0].surahNum),
                         // Mushaf page of the first ayah in the run (report column "ص").
                         page: this.getPage(verses[0].surahNum, verses[0].ayahNum),
                         ayahNum: verses[0].ayahNum,
@@ -249,7 +295,7 @@
                     rep.formatted = newGroups.map(g => this.formatGroup(g, outputType)).join('\n');
                     rep.confidence = avgConf;
                     rep.surahNum = verses[0].surahNum;
-                    rep.surahName = this.getSurahName(verses[0].surahNum);
+                    rep.surahName = this.getPlainSurahName(verses[0].surahNum);
                     rep.ayahNum = verses[0].ayahNum;
                     rep.endAyahNum = verses[verses.length - 1].ayahNum;
                     rep.verseCount = verses.length;
@@ -630,6 +676,35 @@
             const vs = this.makeVerseObj(best, outputType, text, false, originalCandidate);
             vs.confidence = bestScore;
             return vs;
+        },
+
+        /**
+         * Does an existing "[…]" tag cite the verses we just matched?
+         *
+         * Compares the surah name (ignoring tashkeel and the word سورة) and, when
+         * the tag carries ayah numbers, checks they overlap the matched range.
+         * Anything else is left alone — a stray bracket must never be deleted.
+         *
+         * @param {string} tag raw tag text including the brackets
+         * @param {object[]} verses matched verses
+         * @returns {boolean}
+         */
+        _tagCitesVerses(tag, verses) {
+            if (!verses || !verses.length) return false;
+            const inner = tag.replace(/^[\s\r\n]*\[/, '').replace(/\]\s*$/, '');
+            const norm = U.normalizeArabic(inner).replace(/\bسوره\b/g, '').trim();
+            if (!norm) return false;
+
+            const expected = U.normalizeArabic(this.getPlainSurahName(verses[0].surahNum));
+            if (!expected || norm.indexOf(expected) === -1) return false;
+
+            // Ayah numbers are optional; when present they must overlap.
+            const nums = (norm.match(/\d+/g) || []).map(Number);
+            if (!nums.length) return true;
+
+            const first = verses[0].ayahNum;
+            const last = verses[verses.length - 1].ayahNum;
+            return nums.some(n => n >= first && n <= last);
         },
 
         /**
@@ -1294,16 +1369,29 @@
 
         formatGroup(group, outputType) {
             const d = n => U.toArabicDigits(n);
+            const name = num => this.getSurahName(num);
             if (group.length === 1) {
                 const v = group[0];
-                return `\uFD3F${v.verseText || ''}\uFD3E [${this.getSurahName(v.surahNum)}: ${d(v.ayahNum)}]`;
+                return `\uFD3F${v.verseText || ''}\uFD3E [${name(v.surahNum)}: ${d(v.ayahNum)}]`;
             }
             const parts = group.map(v => `${v.verseText} (${d(v.ayahNum)})`);
             const first = group[0], last = group[group.length - 1];
-            return `\uFD3F${parts.join(' ')}\uFD3E [${this.getSurahName(first.surahNum)}: ${d(first.ayahNum)}–${d(last.ayahNum)}]`;
+            return `\uFD3F${parts.join(' ')}\uFD3E [${name(first.surahNum)}: ` +
+                   `${d(first.ayahNum)}${this.RANGE_SEPARATOR}${d(last.ayahNum)}]`;
         },
 
-        getSurahName(num) { return SURAH_NAMES[num] || `سورة ${num}`; },
+        /**
+         * @param {number} num surah number
+         * @param {boolean} [vocalised] override the VOCALISED_NAMES setting
+         */
+        getSurahName(num, vocalised) {
+            const useTashkeel = vocalised === undefined ? this.VOCALISED_NAMES : vocalised;
+            if (useTashkeel && SURAH_NAMES_TASHKEEL[num]) return SURAH_NAMES_TASHKEEL[num];
+            return SURAH_NAMES[num] || `سورة ${num}`;
+        },
+
+        /** Plain (unvocalised) surah name — used for report columns and search. */
+        getPlainSurahName(num) { return SURAH_NAMES[num] || `سورة ${num}`; },
 
         /**
          * Mushaf page (1–604) for an ayah, or null when the dataset omits it.

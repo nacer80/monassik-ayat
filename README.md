@@ -8,9 +8,9 @@ Runs entirely in the browser. **No server, no build step, no network.** Your dat
 never leaves the machine.
 
 ```
-(الحمد لله رب العالمين)          →  ﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾ [الفاتحة: ٢]
-(الحمد رب العالمين الرحمن )      →  ﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ (٢) الرَّحْمَنِ الرَّحِيمِ (٣)﴾ [الفاتحة: ٢–٣]
-(و وهبنا له اسحاق ويعقوب)        →  ﴿وَوَهَبْنَا لَهُ إِسْحَاقَ وَيَعْقُوبَ﴾ [الأنعام: ٨٤]
+(الحمد لله رب العالمين)          →  ﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾ [الفَاتِحَةِ: ٢]
+(الحمد رب العالمين الرحمن )      →  ﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ (٢) الرَّحْمَنِ الرَّحِيمِ (٣)﴾ [الفَاتِحَةِ: ٢-٣]
+(و وهبنا له اسحاق ويعقوب)        →  ﴿وَوَهَبْنَا لَهُ إِسْحَاقَ وَيَعْقُوبَ﴾ [الأَنْعَامِ: ٨٤]
 ```
 
 > **بالعربية:** انظر [ABOUT.md](ABOUT.md) لوصف موجز بالعربية.
@@ -40,7 +40,11 @@ python3 -m http.server 8000   # then open http://localhost:8000
 **Matching**
 - Full mushaf indexed (6,236 verses) — inverted token index, O(1) verse lookup
 - Imlā'ī or ʿUthmānī output script
-- Consecutive verses merged into one run: `﴿… (٢) … (٣)﴾ [الفاتحة: ٢–٣]`
+- Consecutive verses merged into one run: `﴿… (٢) … (٣)﴾ [الفَاتِحَةِ: ٢-٣]`
+- Vocalised surah names and a hyphen range separator (`Matcher.VOCALISED_NAMES` /
+  `Matcher.RANGE_SEPARATOR` switch both back if you prefer `[الفاتحة: ٢–٣]`)
+- An existing `[سُورَةُ النَّحْلِ: ٥٣-٥٤]` tag after a quote is replaced, not duplicated —
+  unrelated brackets and footnotes are left alone
 - Partial quotes, trailing `...`, and inline verse numbers handled
 - Repeated verses flagged (`فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ` occurs 31×) and disambiguated
   using the row's own `SuraID`/`AyahID`
@@ -110,14 +114,14 @@ stays as written.
 Single-word ayat (`حم`, `الم`, `يس`, `الرحمن`) are never converted on their own —
 they're indistinguishable from ordinary prose — but *are* converted inside a longer
 run. When a muqaṭṭaʿa opens several surahs, the following ayah decides which one:
-`(حم والكتاب المبين)` → `[الزخرف: ١–٢]`, `(حم تنزيل الكتاب…)` → `[غافر: ١–٢]`.
+`(حم والكتاب المبين)` → `[الزُّخْرُفِ: ١-٢]`, `(حم تنزيل الكتاب…)` → `[غَافِرٍ: ١-٢]`.
 
 ---
 
 ## Testing
 
 ```bash
-node tests/run-tests.js                      # 165 engine assertions
+node tests/run-tests.js                      # 180 engine assertions
 node tests/audit.js                          # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads     # regression vs a previous version
 python3 tests/ui-test.py                     # 74 browser assertions (needs playwright)

@@ -576,6 +576,52 @@ quotation now, which is the same strategy every other ayah already followed.
 
 Audit after both changes: **0 matches lost**, accuracy still 100 %.
 
+## Reference style and duplicate tags (fourteenth pass)
+
+**Reported:** a passage already carrying `[سُورَةُ النَّحْلِ: ٥٣-٥٤]` ended up with *two*
+references — the generated one plus the author's original. Also requested: a hyphen
+instead of an en-dash between ayah numbers, and vocalised surah names.
+
+### 1. Duplicate reference tag
+
+Tag absorption already existed, but `REFERENCE_TAG_RE` was anchored to the same line
+(`/^[ \t]*\[…\]/`). The reported tag sat two lines below the quote, so it never
+matched and a second reference was appended.
+
+The pattern now tolerates up to two intervening line breaks. Because that widens
+what can be swallowed, absorption is gated on `_tagCitesVerses()`: the tag must name
+the same surah (compared without tashkeel, ignoring the word سورة) and, if it lists
+ayah numbers, they must overlap the matched range. Verified:
+
+| Input after the quote | Result |
+|---|---|
+| `[الفاتحة: ٢]` / `[سورة الفاتحة: ٢]` / tag on its own line | absorbed |
+| `[البقرة: ٢٥٥]` (different surah) | **kept** |
+| `[الفاتحة: ٧]` (different ayah) | **kept** |
+| `[انظر: تفسير الطبري]`, `[١]` | **kept** |
+
+### 2. Hyphen instead of en-dash
+
+`Matcher.RANGE_SEPARATOR` (default `-`) replaces the hard-coded `–`.
+
+### 3. Vocalised surah names
+
+`SURAH_NAMES_TASHKEEL` adds all 114 names in the genitive, as printed references use
+them: `[الفَاتِحَةِ: ٢]`, `[النَّحْلِ: ٥٣-٥٤]`. Toggle with `Matcher.VOCALISED_NAMES`.
+
+Cross-checked every entry: stripping the tashkeel reproduces the plain list exactly,
+apart from سَبَإٍ and النَّبَإِ whose genitive hamza seat legitimately differs.
+
+The **report column keeps the plain name** so searching for "الفاتحة" still works;
+only the inserted reference is vocalised.
+
+### Regression note
+
+The audit's raw diff jumped to `identical=41 different=680` because *every* label
+changed by design. Comparing the verse text with labels stripped shows **720/726
+identical**, and the 6 remaining are the pre-existing accuracy improvements from
+earlier passes. Zero matches lost.
+
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)
 compares old vs new output:
@@ -664,7 +710,7 @@ opening `index.html` directly — only the SQLite `.wasm` needs a server.
 ### Tests
 
 ```bash
-node tests/run-tests.js     # 165 engine assertions
+node tests/run-tests.js     # 180 engine assertions
 node tests/audit.js         # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads   # regression vs the original engine
 python3 tests/ui-test.py    # 74 browser assertions (needs playwright)
