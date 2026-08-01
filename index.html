@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>المُنسِق — تنسيق وتدقيق الآيات القرآنية</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="light">
+
+<header>
+    <h1><span class="icon">📝</span> المُنسِق</h1>
+    <div class="toolbar">
+        <button id="btnTheme" title="تبديل السمة" aria-label="تبديل السمة">🌓</button>
+
+        <select id="selOutputType" title="نوع الرسم" aria-label="نوع الرسم">
+            <option value="imlai">إملائي</option>
+            <option value="uthmani">عثماني</option>
+        </select>
+
+        <label class="inline" title="عند التعطيل يتم تنسيق الآيات فقط دون تصحيح الأخطاء">
+            <input type="checkbox" id="chkCorrection">
+            <span>تدقيق وتصحيح</span>
+        </label>
+
+        <button id="btnLoadQuran" class="primary">📖 تحميل quran.json</button>
+        <button id="btnLoadDB" title="ملف SQLite (.db) أو JSON">🗄️ قاعدة البيانات</button>
+        <button id="btnSettings" style="display:none;" title="إعدادات الأعمدة">⚙️</button>
+        <button id="btnStart" class="success" disabled>▶️ بدء المعالجة</button>
+        <button id="btnPause" disabled>⏸️ إيقاف مؤقت</button>
+        <button id="btnCancel" class="danger" disabled>⏹️ إلغاء</button>
+    </div>
+</header>
+
+<main>
+    <!-- ============ اختبار تجريبي ============ -->
+    <section class="test-panel" id="testPanel">
+        <h3>
+            🧪 اختبار تجريبي
+            <span class="badge-info" id="quranStatus">⚠️ لم يتم تحميل القرآن</span>
+        </h3>
+        <textarea id="testInput"
+            placeholder="الصق النص هنا... مثال: قال تعالى ﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾ — اضغط Ctrl+Enter للتنسيق"></textarea>
+        <div class="btn-row">
+            <button id="btnTestFormat" class="btn-test" disabled>✨ تنسيق النص</button>
+            <button id="btnClearTest" class="btn-clear">🗑️ مسح</button>
+            <button id="btnLoadSample" class="btn-clear">📋 تحميل مثال</button>
+            <button id="btnCopyTest" class="btn-clear">📄 نسخ الناتج</button>
+        </div>
+        <div id="testOutput" class="output-box" style="display:none;" dir="rtl"></div>
+        <div class="stats-mini" id="testStats" style="display:none;">
+            <span>✅ الآيات المكتشفة: <strong id="testVerseCount">0</strong></span>
+            <span>📊 متوسط الثقة: <strong id="testAvgConf">0%</strong></span>
+            <span>⏱️ وقت المعالجة: <strong id="testTime">0ms</strong></span>
+        </div>
+    </section>
+
+    <div class="panel-grid">
+        <!-- ============ التقدم ============ -->
+        <section class="panel full-width" id="panelProgress">
+            <div class="panel-header"><span>📊 حالة المعالجة</span><span id="lblStatus">جاهز</span></div>
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar" style="width:0%"></div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+            <div class="progress-meta">
+                <span id="lblRowInfo">الصف: 0 / 0</span>
+                <span id="lblTime">الوقت: 00:00</span>
+                <span id="lblETA">المتبقي: --</span>
+            </div>
+        </section>
+
+        <!-- ============ الإحصائيات ============ -->
+        <section class="panel full-width" id="panelStats">
+            <div class="panel-header"><span>📈 الإحصائيات</span></div>
+            <div class="stats-row" id="statsRow">
+                <div class="stat-card"><div class="stat-value" id="statScanned">0</div><div class="stat-label">صف ممسوح</div></div>
+                <div class="stat-card"><div class="stat-value" id="statModified">0</div><div class="stat-label">صف معدل</div></div>
+                <div class="stat-card"><div class="stat-value" id="statVerses">0</div><div class="stat-label">آية مكتشفة</div></div>
+                <div class="stat-card"><div class="stat-value" id="statSingle">0</div><div class="stat-label">آية مفردة</div></div>
+                <div class="stat-card"><div class="stat-value" id="statMulti">0</div><div class="stat-label">آيات متتالية</div></div>
+                <div class="stat-card"><div class="stat-value" id="statLowConf">0</div><div class="stat-label">ثقة منخفضة</div></div>
+                <div class="stat-card"><div class="stat-value" id="statAmbiguous">0</div><div class="stat-label">مواضع متكررة</div></div>
+                <div class="stat-card"><div class="stat-value" id="statAvgConf">-</div><div class="stat-label">متوسط الثقة</div></div>
+            </div>
+        </section>
+
+        <!-- ============ التقرير ============ -->
+        <section class="panel full-width" id="panelReport">
+            <div class="panel-header">
+                <span>📋 تقرير النتائج <small id="lblTableNote" style="font-weight:400;color:var(--text2);"></small></span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <span id="lblApproved" style="font-size:.8em;color:var(--text2);">المعتمدة: 0 / 0</span>
+                    <input type="text" id="txtSearch" placeholder="🔍 بحث..." style="width:150px;">
+                    <select id="selFilter">
+                        <option value="all">الكل</option>
+                        <option value="changed">المعدلة فقط</option>
+                        <option value="lowConf">ثقة منخفضة فقط</option>
+                        <option value="corrected">التصحيحات فقط</option>
+                        <option value="multi">الآيات المتتالية</option>
+                        <option value="ambiguous">مواضع متكررة (تحتاج مراجعة)</option>
+                    </select>
+                    <button id="btnSelectAll" title="اعتماد الكل">☑️ الكل</button>
+                    <button id="btnSelectNone" title="إلغاء اعتماد المعروض">☐ لا شيء</button>
+                    <label class="inline" title="عند إلغاء تحويل آية، تُستثنى كل المواضع المطابقة لها في الجدول">
+                        <input type="checkbox" id="chkSkipIdentical" checked>
+                        <span>تطبيق على كل المواضع المطابقة</span>
+                    </label>
+                    <button id="btnExportCSV" disabled>📥 CSV</button>
+                    <button id="btnExportJSON" disabled>📥 JSON</button>
+                    <button id="btnExportHTML" disabled>📥 HTML</button>
+                    <button id="btnClearResults" disabled>🗑️ مسح</button>
+                    <button id="btnSaveDB" class="success" disabled>💾 حفظ قاعدة البيانات</button>
+                    <button id="btnSaveJSON" class="success" disabled title="حفظ النتائج بصيغة JSON">💾 حفظ JSON</button>
+                </div>
+            </div>
+            <div class="table-wrap" id="reportTableWrap">
+                <table id="reportTable">
+                    <thead>
+                        <tr>
+                            <th data-sort="id">#</th>
+                            <th data-sort="before">قبل</th>
+                            <th data-sort="after">بعد</th>
+                            <th data-sort="confidence">الثقة</th>
+                            <th data-sort="surah">السورة</th>
+                            <th data-sort="ayahRange">الآيات</th>
+                            <th data-sort="count">العدد</th>
+                            <th>تصحيحات</th>
+                            <th data-sort="correctionType">تنسيق/تصحيح</th>
+                            <th>تحويل</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTbody"></tbody>
+                </table>
+            </div>
+            <div id="pager" style="display:none;align-items:center;justify-content:center;gap:10px;margin-top:8px;">
+                <button id="btnPrevPage">▶ السابق</button>
+                <span id="lblPage" style="font-size:.85em;color:var(--text2);"></span>
+                <button id="btnNextPage">التالي ◀</button>
+            </div>
+        </section>
+    </div>
+</main>
+
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<!-- ============ إعدادات الأعمدة ============ -->
+<div id="settingsModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal">
+        <h3 id="settingsTitle">⚙️ إعدادات الأعمدة</h3>
+        <p style="margin-bottom:12px;color:var(--text2);font-size:.9em;">اختر الجدول والأعمدة المناسبة:</p>
+        <div class="field"><label for="selTable">الجدول:</label><select id="selTable" class="col-select"></select></div>
+        <div class="field"><label for="colID">ID (رقم تسلسلي):</label><select id="colID" class="col-select"></select></div>
+        <div class="field"><label for="colSuraID">SuraID (رقم السورة):</label><select id="colSuraID" class="col-select"></select></div>
+        <div class="field"><label for="colAyahID">AyahID (رقم الآية):</label><select id="colAyahID" class="col-select"></select></div>
+        <div class="field"><label for="colAyahText">AyahText (نص التفسير):</label><select id="colAyahText" class="col-select"></select></div>
+        <div class="actions">
+            <button id="btnSaveSettings" class="primary">💾 حفظ</button>
+            <button id="btnCancelSettings">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- بيانات القرآن (اختياري: يسمح بالعمل بدون خادم) -->
+<script src="quran-data.js"></script>
+
+<!-- محرك SQLite -->
+<script src="sql-wasm-base64.js" onerror="console.info('sql-wasm-base64.js غير موجود — سيتم استخدام sql-wasm.wasm')"></script>
+<script src="sql-wasm.js" onerror="console.warn('sql-wasm.js غير موجود — ميزة قاعدة البيانات معطلة')"></script>
+
+<!-- التطبيق -->
+<script src="utils.js"></script>
+<script src="quran.js"></script>
+<script src="matcher.js"></script>
+<script src="formatter.js"></script>
+<script src="database.js"></script>
+<script src="report.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
