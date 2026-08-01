@@ -260,16 +260,11 @@ if (typeof globalThis !== 'undefined') globalThis.QuranFormatter = QuranFormatte
                 }
             }
 
-            if (candidates.length === 0) {
-                const re = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]{20,}/g;
-                let m;
-                while ((m = re.exec(text)) !== null) {
-                    const t = m[0].trim();
-                    if (t.split(/\s+/).length >= 3) {
-                        candidates.push({ start: m.index, end: m.index + m[0].length, text: t });
-                    }
-                }
-            }
+            // NOTE: there is deliberately no "scan any long Arabic run" fallback.
+            // Only bracketed text is considered a quotation. Scanning bare prose
+            // converted things the author never marked as a quote — e.g. a plain
+            // بسم الله الرحمن الرحيم heading — and applied a different rule to
+            // unbracketed text than to everything else.
 
             // Merge overlaps so replacements never collide.
             candidates.sort((a, b) => a.start - b.start || b.end - a.end);

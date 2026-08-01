@@ -454,7 +454,11 @@
                         else tied.push(entry);
                     }
                     if (tied.length) {
-                        matched = this.pickBestOccurrence(tied, preferredSurah);
+                        // Several verses share this opening text (حم starts seven
+                        // surahs). Prefer the one whose FOLLOWING ayah continues the
+                        // quotation, otherwise "حم والكتاب المبين" anchors on غافر ١
+                        // and then splits across two unrelated surahs.
+                        matched = this._pickChainable(tied, tokens, pos, preferredSurah);
                         consumed = matched.tokens.length;
                     }
                 }
@@ -626,6 +630,46 @@
             const vs = this.makeVerseObj(best, outputType, text, false, originalCandidate);
             vs.confidence = bestScore;
             return vs;
+        },
+
+        /**
+         * Choose among equally-matching verses by looking one ayah ahead.
+         *
+         * When the quotation continues past this verse, the right occurrence is
+         * the one whose next ayah matches what follows. Falls back to the normal
+         * surah/ayah context when lookahead cannot decide.
+         *
+         * @param {object[]} tied candidates that all match at `pos`
+         * @param {string[]} tokens full candidate token list
+         * @param {number} pos offset already consumed
+         * @param {number|null} preferredSurah
+         * @returns {object}
+         */
+        _pickChainable(tied, tokens, pos, preferredSurah) {
+            if (tied.length === 1) return tied[0];
+
+            const after = pos + tied[0].tokens.length;
+            if (after < tokens.length) {
+                const chainable = [];
+                for (const entry of tied) {
+                    const next = QF.Quran.getNext(entry);
+                    if (!next) continue;
+                    const rest = tokens.length - after;
+                    // Either the next ayah is quoted in full, or the quote stops
+                    // part-way through it (a truncated tail).
+                    const full = this._tokensStartWith(tokens, after, next.tokens);
+                    let prefix = false;
+                    if (!full && rest < next.tokens.length) {
+                        prefix = true;
+                        for (let i = 0; i < rest; i++) {
+                            if (tokens[after + i] !== next.tokens[i]) { prefix = false; break; }
+                        }
+                    }
+                    if (full || prefix) chainable.push(entry);
+                }
+                if (chainable.length) return this.pickBestOccurrence(chainable, preferredSurah);
+            }
+            return this.pickBestOccurrence(tied, preferredSurah);
         },
 
         /**

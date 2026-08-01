@@ -543,6 +543,39 @@ after    distinct pages: [1, 2, 3, 4]
 One leftover string said *المدقق*; the app is *المُنسِق*. Fixed, with a browser
 assertion on both the toast and the page title so it cannot regress.
 
+## Muqatta'a chains and bracket-only matching (thirteenth pass)
+
+### 1. `(حم والكتاب المبين)` split across two surahs
+
+`حم` opens **seven** surahs (غافر، فصلت، الشورى، الزخرف، الدخان، الجاثية، الأحقاف).
+The segmenter picked one by surah context alone, landed on غافر ١, then failed to
+continue and re-anchored `والكتاب المبين` to الزخرف ٢ — producing two references in
+two different surahs.
+
+`_pickChainable()` now looks one ayah ahead: among equally-matching candidates it
+keeps those whose **next** ayah continues the quotation, and only then falls back to
+surah context.
+
+```
+before   ﴿حم﴾ [غافر: ١]   ﴿وَالْكِتَابِ الْمُبِينِ﴾ [الزخرف: ٢]
+after    ﴿حم (١) وَالْكِتَابِ الْمُبِينِ (٢)﴾ [الزخرف: ١–٢]
+```
+
+`(حم تنزيل الكتاب…)` still resolves to غافر ١–٢, so the lookahead discriminates
+rather than just preferring a different surah.
+
+### 2. Unbracketed text was converted
+
+`extractQuranCandidates` had a fallback: when a string contained no brackets it
+scanned for any Arabic run of 20+ characters and treated it as a quotation. That
+applied a *different rule* to unbracketed text — a bare `بسم الله الرحمن الرحيم`
+heading was rewritten even though the author never marked it as a quote.
+
+The fallback is removed. Only `(…)`, `﴿…﴾`, `{…}`, `«…»` and `<<…>>` delimit a
+quotation now, which is the same strategy every other ayah already followed.
+
+Audit after both changes: **0 matches lost**, accuracy still 100 %.
+
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)
 compares old vs new output:
@@ -631,7 +664,7 @@ opening `index.html` directly — only the SQLite `.wasm` needs a server.
 ### Tests
 
 ```bash
-node tests/run-tests.js     # 155 engine assertions
+node tests/run-tests.js     # 165 engine assertions
 node tests/audit.js         # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads   # regression vs the original engine
 python3 tests/ui-test.py    # 74 browser assertions (needs playwright)

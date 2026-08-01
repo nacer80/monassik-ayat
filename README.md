@@ -103,16 +103,21 @@ breaks are copied through byte-for-byte.
 4. Review the table; untick **تحويل** for anything you want left alone.
 5. Save: **حفظ قاعدة البيانات** / **حفظ JSON** / **حفظ Word** (or **حفظ نص** for `.txt`).
 
+**Only bracketed text is converted.** `(…)`, `﴿…﴾`, `{…}`, `«…»` and `<<…>>` mark a
+quotation; bare prose is never touched, so a plain `بسم الله الرحمن الرحيم` heading
+stays as written.
+
 Single-word ayat (`حم`, `الم`, `يس`, `الرحمن`) are never converted on their own —
 they're indistinguishable from ordinary prose — but *are* converted inside a longer
-run.
+run. When a muqaṭṭaʿa opens several surahs, the following ayah decides which one:
+`(حم والكتاب المبين)` → `[الزخرف: ١–٢]`, `(حم تنزيل الكتاب…)` → `[غافر: ١–٢]`.
 
 ---
 
 ## Testing
 
 ```bash
-node tests/run-tests.js                      # 155 engine assertions
+node tests/run-tests.js                      # 165 engine assertions
 node tests/audit.js                          # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads     # regression vs a previous version
 python3 tests/ui-test.py                     # 74 browser assertions (needs playwright)
