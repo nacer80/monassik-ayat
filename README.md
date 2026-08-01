@@ -40,6 +40,8 @@ python3 -m http.server 8000   # then open http://localhost:8000
 **Matching**
 - Full mushaf indexed (6,236 verses) — inverted token index, O(1) verse lookup
 - Imlā'ī or ʿUthmānī output script
+- Accepts quotations written in **either script**: `﴿قُلۡ يَٰٓأَيُّهَا ٱلۡكَٰفِرُونَ﴾` and
+  `﴿إِنَّ ٱلصَّلَوٰةَ تَنۡهَىٰ…﴾` resolve just like their imlā'ī spellings
 - Consecutive verses merged into one run: `﴿… (٢) … (٣)﴾ [الفَاتِحَةِ: ٢-٣]`
 - Vocalised surah names and a hyphen range separator (`Matcher.VOCALISED_NAMES` /
   `Matcher.RANGE_SEPARATOR` switch both back if you prefer `[الفاتحة: ٢–٣]`)
@@ -121,7 +123,8 @@ run. When a muqaṭṭaʿa opens several surahs, the following ayah decides whic
 ## Testing
 
 ```bash
-node tests/run-tests.js                      # 180 engine assertions
+node tests/run-tests.js                      # 193 engine assertions
+node tests/uthmani-sweep.js                  # ʿUthmānī-script coverage
 node tests/audit.js                          # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads     # regression vs a previous version
 python3 tests/ui-test.py                     # 74 browser assertions (needs playwright)

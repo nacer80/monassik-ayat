@@ -672,9 +672,45 @@
                 if (confidence > bestScore) { bestScore = confidence; best = entry; }
             }
 
-            if (!best || bestScore < this.MIN_PREFIX_CONFIDENCE) return null;
-            const vs = this.makeVerseObj(best, outputType, text, false, originalCandidate);
-            vs.confidence = bestScore;
+            if (best && bestScore >= this.MIN_PREFIX_CONFIDENCE) {
+                const vs = this.makeVerseObj(best, outputType, text, false, originalCandidate);
+                vs.confidence = bestScore;
+                return vs;
+            }
+
+            return this.matchBySkeleton(normalized, outputType, preferredSurah, originalCandidate, text);
+        },
+
+        /**
+         * Last-resort match that ignores the imlā'ī/ʿUthmānī spelling split.
+         *
+         * ʿUthmānī drops the alef that modern spelling writes (ٱلصَّلَوٰةَ vs الصلاة,
+         * يَٰٓأَيُّهَا vs يا أيها), and the dagger alef marking it is stripped as a
+         * diacritic. Comparing skeletons — long vowels and hamza carriers removed —
+         * reunites the two scripts.
+         *
+         * Only reached after exact, alias and prefix matching have all failed.
+         *
+         * @returns {object|null}
+         */
+        matchBySkeleton(normalized, outputType, preferredSurah, originalCandidate, rawText) {
+            const skel = U.skeleton(normalized);
+            if (!skel || skel.length < 4) return null;
+
+            const hits = QF.Quran.getBySkeleton(skel);
+            if (!hits.length) return null;
+
+            const chosen = this.pickBestOccurrence(hits, preferredSurah);
+            const vs = this.makeVerseObj(chosen, outputType, rawText, true, originalCandidate);
+            // The spelling differed, so this is a script conversion rather than a
+            // verbatim hit: report slightly below certainty.
+            vs.confidence = 97;
+            if (hits.length > 1) {
+                vs.ambiguous = true;
+                vs.occurrences = hits.length;
+                vs.alternatives = hits.slice(0, 8).map(e => `${e.surahNum}:${e.ayahNum}`);
+                if (!this._resolvedByContext) vs.confidence = 92;
+            }
             return vs;
         },
 
@@ -793,10 +829,11 @@
             const rawTokens = rawNorm === candNorm
                 ? candTokens : rawNorm.split(' ').filter(Boolean);
 
-            const bucket = QF.Quran.tokenIndex.get(candTokens[0]);
-            if (!bucket) return null;
+            // May be absent when the quote is ʿUthmānī and the index imlā'ī —
+            // don't bail out, the skeleton fallback below can still resolve it.
+            const bucket = QF.Quran.tokenIndex.get(candTokens[0]) || [];
 
-            let bestEntry = null, bestStart = -1, aliasLen = 0;
+            let bestEntry = null, bestStart = -1, aliasLen = 0, skeletonMatch = false;
             const aliasHits = [];
             for (const idx of bucket) {
                 const entry = QF.Quran.dictionary[idx];
@@ -822,6 +859,34 @@
                 bestStart = pick.start;
                 aliasLen = pick.len;
             }
+            // Still nothing: the fragment may be ʿUthmānī while the verse is
+            // indexed from its imlā'ī spelling (ٱلصَّلَوٰةَ vs الصلاة). Retry on
+            // skeletons, which are script-neutral.
+            if (!bestEntry) {
+                const candSkel = candTokens.map(t => U.skeleton(t)).filter(Boolean);
+                if (candSkel.length === candTokens.length && candSkel.join('').length >= 4) {
+                    const seen = new Set();
+                    for (const tok of candSkel) {
+                        const b = QF.Quran.skeletonTokenIndex.get(tok);
+                        if (!b) continue;
+                        for (const idx of b) {
+                            if (seen.has(idx)) continue;
+                            seen.add(idx);
+                            const entry = QF.Quran.dictionary[idx];
+                            if (!entry.skeletonTokens ||
+                                entry.skeletonTokens.length < candSkel.length) continue;
+                            const start = this._findTokenRun(entry.skeletonTokens, candSkel);
+                            if (start === -1) continue;
+                            if (preferredSurah && entry.surahNum === preferredSurah) {
+                                bestEntry = entry; bestStart = start; break;
+                            }
+                            if (!bestEntry) { bestEntry = entry; bestStart = start; }
+                        }
+                        if (bestEntry && preferredSurah && bestEntry.surahNum === preferredSurah) break;
+                    }
+                    if (bestEntry) skeletonMatch = true;
+                }
+            }
             if (!bestEntry) return null;
 
             const words = outputType === 'uthmani' ? bestEntry.uthmaniWords : bestEntry.imlaiWords;
@@ -834,7 +899,7 @@
                 surahNum: bestEntry.surahNum,
                 ayahNum: bestEntry.ayahNum,
                 verseText: displayText,
-                confidence: 100,
+                confidence: skeletonMatch ? 97 : 100,
                 isPartial: partial,
                 wordCount: span
             };

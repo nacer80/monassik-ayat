@@ -622,6 +622,41 @@ changed by design. Comparing the verse text with labels stripped shows **720/726
 identical**, and the 6 remaining are the pre-existing accuracy improvements from
 earlier passes. Zero matches lost.
 
+## ʿUthmānī quotations could not be matched (fifteenth pass)
+
+**Reported:** `﴿قُلۡ يَٰٓأَيُّهَا ٱلۡكَٰفِرُونَ﴾` and `﴿إِنَّ ٱلصَّلَوٰةَ تَنۡهَىٰ…﴾` were left unconverted.
+
+**Cause.** ʿUthmānī orthography omits the alef that modern spelling writes and marks
+it with a **dagger alef (U+0670)** — which `normalizeArabic` strips as a diacritic:
+
+```
+imlai   الصلاة  السماوات  الكتاب  العالمين  آمنوا
+uthmani الصلوة  السموت    الكتب   العلمين   ءامنوا
+```
+
+Measured across the mushaf: **3,983 of 6,236 verses (64%)** normalise differently
+between the two scripts, so most ʿUthmānī quotations were unmatchable.
+
+**Fix — three layers, cheapest first:**
+
+1. Each verse's own ʿUthmānī spelling is added to the exact index, so a clean mushaf
+   quote is a direct O(1) hit at 100 %.
+2. `Utils.skeleton()` strips every long vowel and hamza carrier (ا و ي ى ء),
+   collapsing both scripts onto one form. **6,155 of 6,236** verses then agree
+   exactly, with only 23 new collisions.
+3. A skeleton token index lets mid-verse ʿUthmānī *fragments* be located inside
+   verses indexed from their imlā'ī spelling.
+
+The skeleton is lossy, so it is only ever consulted **after** exact, alias and prefix
+matching have failed, and it reports 97 % rather than 100 %.
+
+**A latent bug this exposed.** `matchSubstringRobust` began with
+`if (!bucket) return null` — when a ʿUthmānī first word was absent from the imlā'ī
+index it bailed out before reaching the fallback. Fragment recall went 27 → 35.
+
+New `tests/uthmani-sweep.js`: **477/477 full ʿUthmānī verses resolve**, prose still
+matches nothing, and imlā'ī quoting is untouched (152/152 exact at 100 %).
+
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)
 compares old vs new output:
@@ -710,7 +745,7 @@ opening `index.html` directly — only the SQLite `.wasm` needs a server.
 ### Tests
 
 ```bash
-node tests/run-tests.js     # 180 engine assertions
+node tests/run-tests.js     # 193 engine assertions
 node tests/audit.js         # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads   # regression vs the original engine
 python3 tests/ui-test.py    # 74 browser assertions (needs playwright)

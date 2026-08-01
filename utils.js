@@ -309,6 +309,35 @@ if (typeof globalThis !== 'undefined') globalThis.QuranFormatter = QuranFormatte
         /** Clamp a number into [min,max]. */
         clamp(v, min, max) { return v < min ? min : (v > max ? max : v); },
 
+        /**
+         * Script-agnostic "skeleton" of a word or phrase.
+         *
+         * Imlā'ī and ʿUthmānī spell the same word differently — the mushaf omits
+         * the alef that modern orthography writes, and marks it instead with a
+         * dagger alef (U+0670) that normalisation strips as a diacritic:
+         *
+         *   الصلوة / الصلاة    السموت / السماوات    ءامنوا / آمنوا
+         *   الكتب  / الكتاب     العلمين / العالمين    يايها  / يا أيها
+         *
+         * 64 % of verses (3,983 of 6,236) normalise differently between the two
+         * scripts, so an ʿUthmānī quotation could not be matched at all. Dropping
+         * every long vowel and hamza carrier collapses both spellings onto one
+         * form: 6,155 of 6,236 verses then agree exactly.
+         *
+         * Lossy by design — only ever used as a LAST-RESORT index, after exact
+         * and substring matching have failed.
+         *
+         * @param {string} text
+         * @returns {string}
+         */
+        skeleton(text) {
+            if (!text) return '';
+            return this.normalizeArabic(text)
+                .replace(/[اويىء]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
+
         /** Trailing-ellipsis detection (…, ..., ....). */
         hasTrailingDots(text) { return /(?:\.{2,}|…)\s*$/.test(String(text || '').trimEnd()); },
 

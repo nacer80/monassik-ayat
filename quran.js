@@ -18,7 +18,9 @@
         // --- new indexes ---
         byKey: new Map(),        // "surah:ayah" -> dictionary entry
         byExact: new Map(),      // normalized text -> [entries]
+        bySkeleton: new Map(),   // script-agnostic skeleton -> [entries]
         tokenIndex: new Map(),   // token -> Set<entryIdx>
+        skeletonTokenIndex: new Map(), // skeleton token -> Set<entryIdx>
         bySurah: new Map(),      // surahNum -> entries sorted by ayahNum
         maxVerseTokens: 0,
         isLoaded: false,
@@ -87,9 +89,13 @@
                     // Alternate spelling from a (possibly corrupt) notashkil field,
                     // kept searchable so quotes copied from it still resolve.
                     aliasNormalized: aliasNorm,
-                    aliasTokens: aliasNorm ? aliasNorm.split(' ').filter(Boolean) : null
+                    aliasTokens: aliasNorm ? aliasNorm.split(' ').filter(Boolean) : null,
+                    // Word skeletons, so an ʿUthmānī fragment can be located
+                    // inside a verse indexed from its imlā'ī spelling.
+                    skeletonTokens: null
                 };
 
+                entry.skeletonTokens = tokens.map(t => U.skeleton(t));
                 const idx = this.dictionary.length;
                 this.dictionary.push(entry);
 
@@ -111,6 +117,30 @@
                     let alias = this.byExact.get(aliasNorm);
                     if (!alias) this.byExact.set(aliasNorm, (alias = []));
                     alias.push(entry);
+                }
+
+                // The verse as written in the mushaf: lets an ʿUthmānī quotation
+                // hit the exact index directly instead of falling through.
+                const uthNorm = uthmani ? U.normalizeArabic(uthmani) : '';
+                if (uthNorm && uthNorm !== normalized && uthNorm !== aliasNorm) {
+                    let u = this.byExact.get(uthNorm);
+                    if (!u) this.byExact.set(uthNorm, (u = []));
+                    u.push(entry);
+                }
+
+                for (const tok of new Set(entry.skeletonTokens)) {
+                    if (!tok) continue;
+                    let set = this.skeletonTokenIndex.get(tok);
+                    if (!set) this.skeletonTokenIndex.set(tok, (set = new Set()));
+                    set.add(idx);
+                }
+
+                // Script-agnostic fallback (see Utils.skeleton).
+                const skel = U.skeleton(normalized);
+                if (skel) {
+                    let sk = this.bySkeleton.get(skel);
+                    if (!sk) this.bySkeleton.set(skel, (sk = []));
+                    if (sk.indexOf(entry) === -1) sk.push(entry);
                 }
 
                 let bucket = this.bySurah.get(surahNum);
@@ -162,7 +192,9 @@
             this.contextIndex = new Map();
             this.byKey = new Map();
             this.byExact = new Map();
+            this.bySkeleton = new Map();
             this.tokenIndex = new Map();
+            this.skeletonTokenIndex = new Map();
             this.bySurah = new Map();
             this.maxVerseTokens = 0;
             this.isLoaded = false;
@@ -177,6 +209,9 @@
             const e = this.byKey.get(surahNum + ':' + ayahNum);
             return e ? { surahNum, ayahNum, tokens: e.tokens } : null;
         },
+
+        /** Entries whose script-agnostic skeleton equals `skel`, or []. */
+        getBySkeleton(skel) { return this.bySkeleton.get(skel) || []; },
 
         /** Entries whose normalized text equals `norm`, or []. */
         getExact(norm) { return this.byExact.get(norm) || []; },
