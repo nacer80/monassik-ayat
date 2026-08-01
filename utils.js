@@ -82,9 +82,11 @@ if (typeof globalThis !== 'undefined') globalThis.QuranFormatter = QuranFormatte
          * @param {string} text
          * @returns {string}
          */
-        normalizeArabic(text) {
+        normalizeArabic(text, opts) {
             if (!text || typeof text !== 'string') return '';
-            const cached = normCache.get(text);
+            const joinPrefixes = !(opts && opts.joinPrefixes === false);
+            const cacheKey = joinPrefixes ? text : '\u0000nojoin\u0000' + text;
+            const cached = normCache.get(cacheKey);
             if (cached !== undefined) return cached;
 
             const out = [];
@@ -117,7 +119,19 @@ if (typeof globalThis !== 'undefined') globalThis.QuranFormatter = QuranFormatte
             if (t.indexOf('يا ') !== -1) t = t.replace(/(^|\s)يا\s+(?=[\u0600-\u06FF])/g, '$1يا');
             if (t.indexOf('لو ما') !== -1) t = t.replace(/(^|\s)لو\s+ما(?=\s|$)/g, '$1لوما');
 
-            return normCache.set(text, t);
+            // Detached single-letter prefixes: "و وهبنا" → "ووهبنا".
+            // These particles are always written joined in the mushaf — a
+            // standalone و/ف/ب/ل/ك occurs exactly 0 times across all 6,236
+            // verses — so re-attaching them is safe and fixes OCR/typing splits.
+            //
+            // Opt out via { joinPrefixes: false } when indexing text whose word
+            // boundaries must be preserved verbatim (see the corrupt-notashkil
+            // alias in quran.js: its "و" is a truncated word, not a prefix).
+            if (joinPrefixes) {
+                t = t.replace(/(^|\s)([وفبلك])\s+(?=[\u0600-\u06FF])/g, '$1$2');
+            }
+
+            return normCache.set(cacheKey, t);
         },
 
         /**

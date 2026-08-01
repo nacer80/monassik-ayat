@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Node (only used by the test suites)
+node_modules/
+
+# Python (playwright test deps)
+__pycache__/
+.venv/
+
+# Local outputs
+database_modified.*
+document_formatted.txt
+quran_formatter_report.*

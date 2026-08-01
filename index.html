@@ -25,6 +25,7 @@
 
         <button id="btnLoadQuran" class="primary">📖 تحميل quran.json</button>
         <button id="btnLoadDB" title="ملف SQLite (.db) أو JSON">🗄️ قاعدة البيانات</button>
+        <button id="btnLoadDoc" title="ملف Word (.docx) أو نص (.txt)">📄 Word / نص</button>
         <button id="btnSettings" style="display:none;" title="إعدادات الأعمدة">⚙️</button>
         <button id="btnStart" class="success" disabled>▶️ بدء المعالجة</button>
         <button id="btnPause" disabled>⏸️ إيقاف مؤقت</button>
@@ -112,6 +113,7 @@
                     <button id="btnClearResults" disabled>🗑️ مسح</button>
                     <button id="btnSaveDB" class="success" disabled>💾 حفظ قاعدة البيانات</button>
                     <button id="btnSaveJSON" class="success" disabled title="حفظ النتائج بصيغة JSON">💾 حفظ JSON</button>
+                    <button id="btnSaveText" class="success" disabled title="حفظ المستند كنص بعد التنسيق">💾 حفظ نص</button>
                 </div>
             </div>
             <div class="table-wrap" id="reportTableWrap">
@@ -122,6 +124,7 @@
                             <th data-sort="before">قبل</th>
                             <th data-sort="after">بعد</th>
                             <th data-sort="confidence">الثقة</th>
+                            <th data-sort="page" title="رقم صفحة المصحف">ص</th>
                             <th data-sort="surah">السورة</th>
                             <th data-sort="ayahRange">الآيات</th>
                             <th data-sort="count">العدد</th>
@@ -170,6 +173,7 @@
 
 <!-- التطبيق -->
 <script src="utils.js"></script>
+<script src="docx.js"></script>
 <script src="quran.js"></script>
 <script src="matcher.js"></script>
 <script src="formatter.js"></script>

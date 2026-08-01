@@ -114,6 +114,8 @@
                         confidence: this._avgConfidence(verses),
                         surahNum: verses[0].surahNum,
                         surahName: this.getSurahName(verses[0].surahNum),
+                        // Mushaf page of the first ayah in the run (report column "ص").
+                        page: this.getPage(verses[0].surahNum, verses[0].ayahNum),
                         ayahNum: verses[0].ayahNum,
                         endAyahNum: verses[verses.length - 1].ayahNum,
                         verseCount: verses.length,
@@ -146,6 +148,7 @@
                     confidence: rep.confidence,
                     surahNum: rep.surahNum,
                     surahName: rep.surahName,
+                    page: rep.page ?? this.getPage(rep.surahNum, rep.ayahNum),
                     ayahNum: rep.ayahNum,
                     endAyahNum: rep.endAyahNum ?? rep.ayahNum,
                     verseCount: rep.verseCount,
@@ -665,10 +668,16 @@
             const candTokens = U.tokenize(candNorm);
             if (candTokens.length < 2) return null;
 
+            // Alias entries are indexed with their original word boundaries, so
+            // probe them with an unjoined copy of the query.
+            const rawNorm = U.normalizeArabic(text, { joinPrefixes: false });
+            const rawTokens = rawNorm === candNorm
+                ? candTokens : rawNorm.split(' ').filter(Boolean);
+
             const bucket = QF.Quran.tokenIndex.get(candTokens[0]);
             if (!bucket) return null;
 
-            let bestEntry = null, bestStart = -1;
+            let bestEntry = null, bestStart = -1, aliasLen = 0;
             const aliasHits = [];
             for (const idx of bucket) {
                 const entry = QF.Quran.dictionary[idx];
@@ -681,9 +690,9 @@
                     }
                 }
                 // Fall back to the alternate spelling (corrupt notashkil source).
-                if (entry.aliasTokens && entry.aliasTokens.length >= candTokens.length) {
-                    const aStart = this._findTokenRun(entry.aliasTokens, candTokens);
-                    if (aStart !== -1) aliasHits.push({ entry, start: aStart });
+                if (entry.aliasTokens && entry.aliasTokens.length >= rawTokens.length) {
+                    const aStart = this._findTokenRun(entry.aliasTokens, rawTokens);
+                    if (aStart !== -1) aliasHits.push({ entry, start: aStart, len: rawTokens.length });
                 }
             }
             if (!bestEntry && aliasHits.length) {
@@ -692,12 +701,14 @@
                 // Alias and canonical token arrays are word-aligned (same length),
                 // so the index maps directly onto the display words.
                 bestStart = pick.start;
+                aliasLen = pick.len;
             }
             if (!bestEntry) return null;
 
             const words = outputType === 'uthmani' ? bestEntry.uthmaniWords : bestEntry.imlaiWords;
-            let displayText = words.slice(bestStart, bestStart + candTokens.length).join(' ');
-            const partial = candTokens.length !== bestEntry.tokens.length;
+            const span = aliasLen || candTokens.length;
+            let displayText = words.slice(bestStart, bestStart + span).join(' ');
+            const partial = span !== bestEntry.tokens.length;
             if (partial && this.hasTrailingDots(originalCandidate || text)) displayText += ' ...';
 
             const result = {
@@ -706,7 +717,7 @@
                 verseText: displayText,
                 confidence: 100,
                 isPartial: partial,
-                wordCount: candTokens.length
+                wordCount: span
             };
 
             // Whole-verse hit whose text repeats elsewhere: mark for review.
@@ -1248,6 +1259,17 @@
             return `\uFD3F${parts.join(' ')}\uFD3E [${this.getSurahName(first.surahNum)}: ${d(first.ayahNum)}–${d(last.ayahNum)}]`;
         },
 
-        getSurahName(num) { return SURAH_NAMES[num] || `سورة ${num}`; }
+        getSurahName(num) { return SURAH_NAMES[num] || `سورة ${num}`; },
+
+        /**
+         * Mushaf page (1–604) for an ayah, or null when the dataset omits it.
+         * @param {number} surahNum
+         * @param {number} ayahNum
+         * @returns {number|null}
+         */
+        getPage(surahNum, ayahNum) {
+            const e = QF.Quran.getVerseEntry(surahNum, ayahNum);
+            return (e && e.page) || null;
+        }
     };
 })(QuranFormatter);

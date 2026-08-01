@@ -114,6 +114,19 @@
         setBusy($('btnCancel'), !state.isProcessing);
         setBusy($('btnSaveDB'), state.results.length === 0 || state.isProcessing);
         setBusy($('btnSaveJSON'), state.results.length === 0 || state.isProcessing);
+        const docBtn = $('btnSaveText');
+        if (docBtn) {
+            const isDoc = !!(state.db && state.db.__isDoc);
+            docBtn.style.display = isDoc ? 'inline-flex' : 'none';
+            docBtn.disabled = state.results.length === 0 || state.isProcessing;
+            if (isDoc) {
+                const asDocx = state.db.__docKind === 'docx';
+                docBtn.textContent = asDocx ? '💾 حفظ Word' : '💾 حفظ نص';
+                docBtn.title = asDocx
+                    ? 'حفظ المستند بصيغة Word مع الحفاظ على التنسيق الأصلي'
+                    : 'حفظ المستند كملف نصي';
+            }
+        }
         setBusy($('btnExportCSV'), !hasResults);
         setBusy($('btnExportJSON'), !hasResults);
         setBusy($('btnExportHTML'), !hasResults);
@@ -484,6 +497,8 @@
 
         const surahIdx = state.surahIdx;
         const ayahIdIdx = state.columns.findIndex(c => c.name === state.ayahIdCol);
+        const docPageIdx = state.db && state.db.__isDoc
+            ? state.columns.findIndex(c => c.name === 'ص') : -1;
         const correctionEnabled = $('chkCorrection').checked;
         const startTime = Date.now();
         let lastPaint = 0;
@@ -514,6 +529,11 @@
                         result.rowIndex = i;
                         result.source = 'db';
                         result.originalText = text;
+                        // For Word/text sources the report's ص column shows the
+                        // page of the *document* the quote was found on, so the
+                        // user can go back to it. (rep.page holds the mushaf page.)
+                        result.docPage = docPageIdx >= 0
+                            ? (Number(rows[i][docPageIdx]) || null) : null;
                         state.results.push(result);
                     }
                 } catch (err) {
@@ -614,6 +634,8 @@
                 after: rep.formatted || '',
                 confidence: rep.confidence,
                 surah: rep.surahName || '',
+                page: res.docPage ?? null,          // ص = document page
+                mushafPage: rep.page || null,       // ص المصحف
                 ayahRange: rep.verseCount > 1 ? `${rep.ayahNum}-${rep.endAyahNum}` : String(rep.ayahNum),
                 count: rep.verseCount,
                 changed: rep.original !== rep.formatted,
@@ -677,6 +699,9 @@
     <td class="cell-text" title="${U.escapeHTML(r.before)}">${U.escapeHTML(r.before.substring(0, 80))}</td>
     <td class="cell-text" title="${U.escapeHTML(r.after)}">${U.escapeHTML(r.after.substring(0, 80))}</td>
     <td class="${confClass}">${r.confidence}%</td>
+    <td title="${(state.db && state.db.__parsed && state.db.__parsed.estimated ? 'رقم تقديري — ' : '') + (r.mushafPage ? 'صفحة المصحف: ' + U.escapeHTML(U.toArabicDigits(r.mushafPage)) : '')}">${
+        r.page ? U.escapeHTML(U.toArabicDigits(r.page))
+               : (r.mushafPage ? U.escapeHTML(U.toArabicDigits(r.mushafPage)) : '-')}</td>
     <td>${U.escapeHTML(r.surah)}${r.ambiguous
         ? ` <span class="tag tag-warning" title="هذا النص يتكرر في ${r.occurrences} مواضع: ${U.escapeHTML((r.alternatives || []).join('، '))}">⚠ متكرر ×${r.occurrences}</span>`
         : ''}</td>
@@ -937,6 +962,100 @@
     }
 
     // ===================================================================
+    //  Word / text documents
+    // ===================================================================
+    /**
+     * Load a .docx or .txt file. The document is presented as a table
+     * (ص | الفقرة | AyahText) so it reuses the whole existing pipeline:
+     * process → review → untick → export.
+     */
+    async function handleDocFile(file) {
+        try {
+            showToast('📄 جارٍ قراءة المستند...', 'info');
+            const parsed = await QF.Docx.read(file);
+            if (!parsed.paragraphs.length) throw new Error('المستند لا يحتوي على نص');
+
+            if (state.db) { try { state.db.close(); } catch (_) {} }
+
+            const name = String(file.name || 'Document').replace(/\.[^.]+$/, '');
+            const db = QF.Docx.toDataSource(parsed, name);
+
+            state.db = db;
+            state.tableNames = [db.__table];
+            state.table = db.__table;
+            state.columns = QF.Database.getColumns(db, state.table);
+            state.idCol = 'الفقرة';
+            state.surahCol = '';
+            state.ayahIdCol = '';
+            state.ayahTextCol = 'AyahText';
+            state.ayahTextColIdx = 2;
+            state.surahIdx = -1;
+            state.totalRows = db.__rows.length;
+            state.dbLoaded = true;
+
+            $('btnSettings').style.display = 'inline-flex';
+            showToast(
+                `✅ تم تحميل ${state.totalRows} فقرة من ${parsed.pageCount} صفحة` +
+                    (parsed.estimated ? ' (أرقام الصفحات تقديرية)' : ''),
+                'success');
+            markLoaded('btnLoadDoc', '📄 المستند ✓');
+            updateButtons();
+        } catch (err) {
+            showToast('❌ فشل قراءة المستند: ' + err.message, 'error');
+            console.error(err);
+        }
+    }
+
+    /**
+     * Save the document back in the format it came from: a .docx source is
+     * rewritten as .docx (keeping the original styling), a .txt source as .txt.
+     */
+    async function saveDocument() {
+        if (!state.db || !state.db.__isDoc) return;
+        const btn = $('btnSaveText');
+        setBusy(btn, true);
+        try {
+            const { rows, applied } = buildOutputRows();
+            if (applied === 0) {
+                showToast('⚠️ لم يتم اعتماد أي تحويل — لا شيء للحفظ', 'warning');
+                return;
+            }
+
+            const base = (state.table || 'document').replace(/[\\/:*?"<>|]/g, '_');
+            const isDocx = state.db.__docKind === 'docx' && state.db.__parsed
+                && state.db.__parsed.source;
+
+            if (isDocx) {
+                // Map each edited row back to its <w:p> and rewrite in place.
+                const edits = new Map();
+                const pIdx = state.db.__pIndex || [];
+                for (let i = 0; i < rows.length; i++) {
+                    const p = pIdx[i];
+                    if (p == null || p < 0) continue;
+                    const text = String(rows[i][state.ayahTextColIdx] ?? '');
+                    if (text !== String(state.db.__rows[i][state.ayahTextColIdx] ?? '')) {
+                        edits.set(p, text);
+                    }
+                }
+                const blob = await QF.Docx.writeDocx(state.db.__parsed, edits);
+                QF.Database.downloadBlob(blob, `${base}_formatted.docx`);
+                showToast(`💾 تم حفظ ملف Word (${applied} فقرة معدلة)`, 'success');
+            } else {
+                const text = QF.Docx.toPlainText(rows, state.ayahTextColIdx);
+                const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+                QF.Database.downloadBlob(blob, `${base}_formatted.txt`);
+                showToast(`💾 تم حفظ الملف النصي (${applied} فقرة معدلة)`, 'success');
+            }
+        } catch (err) {
+            showToast('❌ فشل الحفظ: ' + err.message, 'error');
+            console.error(err);
+        } finally {
+            setBusy(btn, false);
+            updateButtons();
+        }
+    }
+
+    // ===================================================================
     //  Init
     // ===================================================================
     function init() {
@@ -960,9 +1079,11 @@
 
         const quranInput = makeFileInput('quranFileInput', '.json', handleQuranFile);
         const dbInput = makeFileInput('dbFileInput', '.db,.sqlite,.sqlite3,.db3,.json', handleDBFile);
+        const docInput = makeFileInput('docFileInput', '.docx,.txt,.md', handleDocFile);
 
         $('btnLoadQuran').onclick = () => quranInput.click();
         $('btnLoadDB').onclick = () => dbInput.click();
+        $('btnLoadDoc').onclick = () => docInput.click();
         $('btnSettings').onclick = showSettingsModal;
         $('btnSaveSettings').onclick = saveSettings;
         $('btnCancelSettings').onclick = hideSettingsModal;
@@ -974,6 +1095,7 @@
         $('btnExportHTML').onclick = exportHTML;
         $('btnSaveDB').onclick = () => saveDatabase('auto');
         $('btnSaveJSON').onclick = () => saveDatabase('json');
+        $('btnSaveText').onclick = saveDocument;
         $('btnClearResults').onclick = clearResults;
         $('btnSelectAll').onclick = () => setAllApprovals(true);
         $('btnSelectNone').onclick = () => setAllApprovals(false);
@@ -1031,7 +1153,7 @@
         updateButtons();
         updateQuranStatus();
         renderReport();
-        showToast('🚀 المدقق جاهز. سيتم تحميل quran.json تلقائياً.', 'info');
+        showToast('🚀 المُنسِق جاهز. سيتم تحميل quran.json تلقائياً.', 'info');
     }
 
     // Public surface (kept for compatibility)

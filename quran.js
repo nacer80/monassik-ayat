@@ -62,7 +62,11 @@
 
                 // Keep the supplied variant as an extra alias when it genuinely
                 // differs, so quotes copied from that field still resolve.
-                const suppliedNorm = supplied ? U.normalizeArabic(supplied) : '';
+                // Index the alias WITHOUT prefix-joining: in the corrupt rows a
+                // lone "و" is a truncated word (والأرض), not a detached particle,
+                // so joining it to the next word would destroy the alias.
+                const suppliedNorm = supplied
+                    ? U.normalizeArabic(supplied, { joinPrefixes: false }) : '';
                 const aliasNorm = (suppliedNorm && suppliedNorm !== normalized) ? suppliedNorm : null;
 
                 const tokens = normalized.split(' ').filter(Boolean);
@@ -78,6 +82,8 @@
                     // pre-split display words: avoids repeated .split in the matcher
                     imlaiWords: (imlai || uthmani).split(/\s+/).filter(Boolean),
                     uthmaniWords: (uthmani || imlai).split(/\s+/).filter(Boolean),
+                    // Mushaf page (1–604), surfaced in the report as "ص".
+                    page: Number(item.page_num ?? item.pageNum ?? 0) || null,
                     // Alternate spelling from a (possibly corrupt) notashkil field,
                     // kept searchable so quotes copied from it still resolve.
                     aliasNormalized: aliasNorm,
