@@ -657,12 +657,15 @@
             if (!bucket) return null;
 
             let best = null, bestScore = 0;
+            const prefixHits = [];
             for (const idx of bucket) {
                 const entry = QF.Quran.dictionary[idx];
                 if (entry.normalized.length <= normalized.length) continue;
                 if (!entry.normalized.startsWith(normalized)) continue;
                 // must break on a word boundary
                 if (entry.normalized[normalized.length] !== ' ') continue;
+
+                prefixHits.push(entry);
 
                 const ratio = normalized.length / entry.normalized.length;
                 let confidence = ratio >= 0.6 ? 85 : (ratio >= 0.4 ? 75 : 70);
@@ -673,8 +676,20 @@
             }
 
             if (best && bestScore >= this.MIN_PREFIX_CONFIDENCE) {
-                const vs = this.makeVerseObj(best, outputType, text, false, originalCandidate);
+                // A short opening can begin many verses — "الحمد لله" starts six
+                // of them (الفاتحة، الأنعام، إبراهيم، الكهف، سبأ، فاطر). Picking one
+                // silently at full confidence hides that, so flag it as متشابهات
+                // and let the surah/ayah context decide when it can.
+                const chosen = prefixHits.length > 1
+                    ? this.pickBestOccurrence(prefixHits, preferredSurah) : best;
+                const vs = this.makeVerseObj(chosen, outputType, text, false, originalCandidate);
                 vs.confidence = bestScore;
+                if (prefixHits.length > 1) {
+                    vs.ambiguous = true;
+                    vs.occurrences = prefixHits.length;
+                    vs.alternatives = prefixHits.slice(0, 8).map(e => `${e.surahNum}:${e.ayahNum}`);
+                    if (!this._resolvedByContext) vs.confidence = Math.min(vs.confidence, 92);
+                }
                 return vs;
             }
 
@@ -904,20 +919,60 @@
                 wordCount: span
             };
 
-            // Whole-verse hit whose text repeats elsewhere: mark for review.
-            if (!partial) {
-                const dupes = QF.Quran.getExact(bestEntry.normalized);
-                if (dupes.length > 1) {
-                    const chosen = this.pickBestOccurrence(dupes, preferredSurah);
-                    result.surahNum = chosen.surahNum;
-                    result.ayahNum = chosen.ayahNum;
-                    result.ambiguous = true;
-                    result.occurrences = dupes.length;
-                    result.alternatives = dupes.slice(0, 8).map(e => `${e.surahNum}:${e.ayahNum}`);
-                    if (!this._resolvedByContext) result.confidence = 92;
+            // Does this exact wording occur anywhere else? A whole verse may be
+            // repeated verbatim (فبأي آلاء ربكما تكذبان ×31), and a partial quote
+            // may sit inside many verses ("الحمد لله" opens six surahs). Either
+            // way the reference is uncertain, so flag it as متشابهات.
+            const dupes = partial
+                ? this.findRepeatedRuns(candTokens, preferredSurah)
+                : QF.Quran.getExact(bestEntry.normalized);
+            if (dupes.length > 1) {
+                const chosen = this.pickBestOccurrence(dupes, preferredSurah);
+                result.surahNum = chosen.surahNum;
+                result.ayahNum = chosen.ayahNum;
+                result.ambiguous = true;
+                result.occurrences = dupes.length;
+                result.alternatives = dupes.slice(0, 8).map(e => `${e.surahNum}:${e.ayahNum}`);
+                if (!this._resolvedByContext) result.confidence = 92;
+
+                // Re-render from the chosen verse so the text matches the label.
+                const cw = outputType === 'uthmani' ? chosen.uthmaniWords : chosen.imlaiWords;
+                const cs = this._findTokenRun(chosen.tokens, candTokens);
+                if (cs !== -1) {
+                    let dt = cw.slice(cs, cs + span).join(' ');
+                    if (partial && this.hasTrailingDots(originalCandidate || text)) dt += ' ...';
+                    result.verseText = dt;
                 }
             }
             return result;
+        },
+
+        /**
+         * Every verse containing this exact run of words.
+         *
+         * A partial quotation is only safe to reference when it occurs once.
+         * "الحمد لله" appears at the start of six surahs, so reporting it as
+         * الفاتحة ٢ at full confidence would be misleading.
+         *
+         * @param {string[]} candTokens normalised words of the quotation
+         * @param {number|null} preferredSurah
+         * @param {number} [limit=60] stop once this many verses match
+         * @returns {object[]}
+         */
+        findRepeatedRuns(candTokens, preferredSurah, limit = 60) {
+            if (!candTokens || candTokens.length === 0) return [];
+            const bucket = QF.Quran.tokenIndex.get(candTokens[0]);
+            if (!bucket) return [];
+
+            const hits = [];
+            for (const idx of bucket) {
+                const entry = QF.Quran.dictionary[idx];
+                if (entry.tokens.length < candTokens.length) continue;
+                if (this._findTokenRun(entry.tokens, candTokens) === -1) continue;
+                hits.push(entry);
+                if (hits.length >= limit) break;
+            }
+            return hits;
         },
 
         /** Index of the first contiguous occurrence of `needle` inside `hay`, else -1. */

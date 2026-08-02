@@ -48,7 +48,9 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - An existing `[سُورَةُ النَّحْلِ: ٥٣-٥٤]` tag after a quote is replaced, not duplicated —
   unrelated brackets and footnotes are left alone
 - Partial quotes, trailing `...`, and inline verse numbers handled
-- Repeated verses (المتشابهات) flagged — `فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ` occurs 31× — and disambiguated
+- Repeated wording (المتشابهات) flagged — whole verses such as
+  `فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ` (31×) **and** partial quotes such as `(الحمد لله)`,
+  which occurs in 21 verses — then disambiguated
   using the row's own `SuraID`/`AyahID`
 
 **Correction** (opt-in, via *تدقيق وتصحيح*)
@@ -123,7 +125,7 @@ run. When a muqaṭṭaʿa opens several surahs, the following ayah decides whic
 ## Testing
 
 ```bash
-node tests/run-tests.js                      # 193 engine assertions
+node tests/run-tests.js                      # 206 engine assertions
 node tests/uthmani-sweep.js                  # ʿUthmānī-script coverage
 node tests/audit.js                          # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads     # regression vs a previous version

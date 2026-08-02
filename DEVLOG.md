@@ -669,6 +669,40 @@ every surah\:ayah the passage occurs at.
 
 Wording only — no matching behaviour changed.
 
+## Partial quotes are متشابهات too (seventeenth pass)
+
+**Reported:** `(الحمد لله)` and `(الحمد لله...)` were reported as الفاتحة ٢ at 100 %,
+even though that wording opens six surahs and appears inside 21 verses.
+
+**Cause.** Ambiguity detection only ran for *whole-verse* hits:
+
+```js
+if (!partial) {              // ← partial quotes skipped entirely
+    const dupes = QF.Quran.getExact(bestEntry.normalized);
+```
+
+A partial quote is precisely the case most likely to be ambiguous, so the check was
+inverted from where it was needed. The prefix path in `matchWholeText` had the same
+gap — it kept only the single best candidate and discarded the rest.
+
+**Fix.** `findRepeatedRuns()` collects every verse containing the quoted run, and
+both paths now flag the result when there is more than one:
+
+```
+(الحمد لله)             → ⚠ متشابهات ×21   conf 92
+(الحمد لله...)          → ⚠ متشابهات ×21   conf 92   (ellipsis preserved)
+(الحمد لله رب العالمين) → unflagged        conf 100  (unique)
+(قل هو الله)            → unflagged        conf 100  (occurs once)
+```
+
+The displayed text is re-rendered from whichever verse is chosen, so the words and
+the label always agree.
+
+**Accuracy improved as a side effect.** With row context supplied, the partial-quote
+sweep went from **4 wrong to 0** (47/47 correct): the candidate list is now built
+before choosing, so `pickBestOccurrence` can honour the row's own SuraID/AyahID
+instead of settling for whichever verse happened to be scanned first.
+
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)
 compares old vs new output:
@@ -757,7 +791,7 @@ opening `index.html` directly — only the SQLite `.wasm` needs a server.
 ### Tests
 
 ```bash
-node tests/run-tests.js     # 193 engine assertions
+node tests/run-tests.js     # 206 engine assertions
 node tests/audit.js         # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads   # regression vs the original engine
 python3 tests/ui-test.py    # 74 browser assertions (needs playwright)
