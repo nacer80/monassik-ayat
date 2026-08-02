@@ -48,7 +48,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - An existing `[سُورَةُ النَّحْلِ: ٥٣-٥٤]` tag after a quote is replaced, not duplicated —
   unrelated brackets and footnotes are left alone
 - Partial quotes, trailing `...`, and inline verse numbers handled
-- Repeated verses flagged (`فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ` occurs 31×) and disambiguated
+- Repeated verses (المتشابهات) flagged — `فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ` occurs 31× — and disambiguated
   using the row's own `SuraID`/`AyahID`
 
 **Correction** (opt-in, via *تدقيق وتصحيح*)

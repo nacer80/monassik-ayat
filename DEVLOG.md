@@ -71,8 +71,8 @@ Two changes:
   now passes each row's own **`AyahID`** — the column was already in your schema but
   went unused. Verified: two identical `فبأي آلاء` rows correctly resolve to ٤٧ and ١٣.
 - When a quote is genuinely ambiguous it is **flagged** (`ambiguous`, `occurrences`,
-  `alternatives`), shown as a `⚠ متكرر ×31` badge, counted in a new **مواضع متكررة**
-  stat, filterable via *مواضع متكررة (تحتاج مراجعة)*, and marked `needsReview` so it
+  `alternatives`), shown as a `⚠ متشابهات ×31` badge, counted in a **متشابهات**
+  stat, filterable via *المتشابهات (تحتاج مراجعة)*, and marked `needsReview` so it
   can't be bulk-approved unseen. Confidence drops to 92 % only when context can't resolve it.
 
 ### 3. Two smaller matching fixes
@@ -656,6 +656,18 @@ index it bailed out before reaching the fallback. Fragment recall went 27 → 35
 
 New `tests/uthmani-sweep.js`: **477/477 full ʿUthmānī verses resolve**, prose still
 matches nothing, and imlā'ī quoting is untouched (152/152 exact at 100 %).
+
+## Terminology: متكرر → متشابهات (sixteenth pass)
+
+The badge for verses whose text appears in several places now reads
+**⚠ متشابهات ×31** — the established term in علوم القرآن for such passages, rather
+than the generic *متكرر*. The stat card and filter were relabelled to match
+(**متشابهات**, *المتشابهات (تحتاج مراجعة)*).
+
+The explanatory tooltip is unchanged: *هذا النص يتكرر في N مواضع: …* still lists
+every surah\:ayah the passage occurs at.
+
+Wording only — no matching behaviour changed.
 
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)

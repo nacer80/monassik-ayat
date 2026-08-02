@@ -703,7 +703,7 @@
         r.page ? U.escapeHTML(U.toArabicDigits(r.page))
                : (r.mushafPage ? U.escapeHTML(U.toArabicDigits(r.mushafPage)) : '-')}</td>
     <td>${U.escapeHTML(r.surah)}${r.ambiguous
-        ? ` <span class="tag tag-warning" title="هذا النص يتكرر في ${r.occurrences} مواضع: ${U.escapeHTML((r.alternatives || []).join('، '))}">⚠ متكرر ×${r.occurrences}</span>`
+        ? ` <span class="tag tag-warning" title="هذا النص يتكرر في ${r.occurrences} مواضع: ${U.escapeHTML((r.alternatives || []).join('، '))}">⚠ متشابهات ×${r.occurrences}</span>`
         : ''}</td>
     <td>${U.escapeHTML(r.ayahRange)}</td>
     <td>${r.count}</td>
