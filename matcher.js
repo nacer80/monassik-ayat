@@ -443,7 +443,7 @@
                 // Prefer continuing the current surah with the very next ayah.
                 if (prev) {
                     const next = QF.Quran.getNext(prev);
-                    if (next && this._tokensStartWith(tokens, pos, next.tokens)) {
+                    if (next && this._tokensStartWith(tokens, pos, next.tokens, next.skeletonTokens)) {
                         matched = next;
                         consumed = next.tokens.length;
                     }
@@ -495,7 +495,7 @@
                         const entry = QF.Quran.dictionary[idx];
                         if (entry.tokens[0] !== tokens[pos]) continue;
                         if (entry.tokens.length < bestLen) continue;
-                        if (!this._tokensStartWith(tokens, pos, entry.tokens)) continue;
+                        if (!this._tokensStartWith(tokens, pos, entry.tokens, entry.skeletonTokens)) continue;
                         if (entry.tokens.length > bestLen) { bestLen = entry.tokens.length; tied = [entry]; }
                         else tied.push(entry);
                     }
@@ -583,10 +583,33 @@
         },
 
         /** True if tokens[pos..] begins with the whole of `seq`. */
-        _tokensStartWith(tokens, pos, seq) {
+        /**
+         * Do tokens[pos..] begin with the whole of `seq`?
+         *
+         * Compares exactly first, then falls back to skeletons so a quotation in
+         * ʿUthmānī script still lines up with an index built from imlā'ī
+         * (أَنزَلْنَـٰهُ → "انزلنه" vs "انزلناه"). Without this, a multi-verse ʿUthmānī
+         * passage failed to segment at all.
+         *
+         * @param {string[]} tokens
+         * @param {number} pos
+         * @param {string[]} seq
+         * @param {string[]} [seqSkel] pre-computed skeletons of `seq`
+         */
+        _tokensStartWith(tokens, pos, seq, seqSkel) {
             if (pos + seq.length > tokens.length) return false;
+
+            let exact = true;
             for (let i = 0; i < seq.length; i++) {
-                if (tokens[pos + i] !== seq[i]) return false;
+                if (tokens[pos + i] !== seq[i]) { exact = false; break; }
+            }
+            if (exact) return true;
+
+            for (let i = 0; i < seq.length; i++) {
+                const a = tokens[pos + i];
+                const b = seqSkel ? seqSkel[i] : U.skeleton(seq[i]);
+                if (!b) return false;
+                if (U.skeleton(a) !== b) return false;
             }
             return true;
         },

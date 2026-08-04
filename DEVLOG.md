@@ -703,6 +703,46 @@ sweep went from **4 wrong to 0** (47/47 correct): the candidate list is now buil
 before choosing, so `pickBestOccurrence` can honour the row's own SuraID/AyahID
 instead of settling for whichever verse happened to be scanned first.
 
+## Multi-verse ʿUthmānī passages (eighteenth pass)
+
+**Reported:** a full sūrat al-Qadr pasted in ʿUthmānī script detected **no ayat at
+all**; and with an unclosed `﴿` only the first ayah converted, leaving
+`﴾ [القَدْرِ: ١](١) وَمَآ أَدْرَىٰكَ…` debris behind.
+
+### 1. Nothing detected
+
+The ʿUthmānī support added earlier reached `matchWholeText` and
+`matchSubstringRobust`, but **not `segmentIntoVerses`** — the routine that walks a
+multi-verse run. It compared raw tokens only, so `أَنزَلْنَـٰهُ` ("انزلنه") never lined
+up with the indexed "انزلناه" and the chain broke at the first word.
+
+`_tokensStartWith()` now compares exactly first and falls back to skeletons,
+reusing each verse's pre-computed `skeletonTokens` so there is no extra cost on the
+common path.
+
+### 2. Unclosed `﴿` cut the quote at "(١)"
+
+For an unterminated opener, `extractQuranCandidates` scanned forward and stopped at
+the first delimiter — including the `(` of an inline verse number. The candidate was
+therefore just the opening ayah, and everything after `(١)` was left raw.
+
+Inline verse numbers (`(١)`, `[٢]`) are now stepped over rather than treated as the
+end of the quotation.
+
+```
+before   no match  /  ﴿…الْقَدْرِ﴾ [القَدْرِ: ١](١) وَمَآ أَدْرَىٰكَ…
+after    ﴿…(١) …(٢) …(٣) …(٤) …(٥)﴾ [القَدْرِ: ١-٥]
+         ﴿…(١) …(٢)﴾ [القَدْرِ: ١-٢]
+```
+
+### A wrong test this corrected
+
+Two assertions failed afterwards, claiming `العلمين` was an OCR typo that must need
+correction mode. It is not a typo — it is the **genuine ʿUthmānī spelling** of
+العالمين, so matching it exactly, in either mode, is right. The test's premise was
+wrong and has been replaced with a real typo (`العالمن`). Genuine corruption
+(`الحمد للع`, wrong words, ordinary names, devotional prose) is still rejected.
+
 ### Verified against the old engine
 A 728-case regression harness (real verses: exact quotes and truncated prefixes)
 compares old vs new output:
@@ -791,7 +831,7 @@ opening `index.html` directly — only the SQLite `.wasm` needs a server.
 ### Tests
 
 ```bash
-node tests/run-tests.js     # 206 engine assertions
+node tests/run-tests.js     # 214 engine assertions
 node tests/audit.js         # statistical sweep over all 6,236 verses
 node tests/audit.js --compare ../uploads   # regression vs the original engine
 python3 tests/ui-test.py    # 74 browser assertions (needs playwright)

@@ -245,13 +245,25 @@ if (typeof globalThis !== 'undefined') globalThis.QuranFormatter = QuranFormatte
             }
 
             // Unclosed openers: read until a line break or a non-Arabic delimiter.
+            //
+            // Inline verse numbers are stepped over rather than treated as the end
+            // of the quotation: an unclosed ﴿…(١)…(٢)… used to be cut short at the
+            // very first "(", leaving the rest of the passage unformatted.
+            const VERSE_NUM = /^[(\[]\s*[\d\u0660-\u0669\u06F0-\u06F9]{1,3}\s*[)\]]/;
             while (stack.length) {
                 const entry = stack.pop();
                 const from = entry.openIndex + entry.type.open.length;
                 let end = text.length;
                 for (let j = from; j < text.length; j++) {
                     const ch = text[j];
-                    if (ch === '\n' || ch === '\r' || '()\uFD3F\uFD3E{}<>«»'.includes(ch)) { end = j; break; }
+                    if (ch === '\n' || ch === '\r') { end = j; break; }
+
+                    if (ch === '(' || ch === '[') {
+                        const m = VERSE_NUM.exec(text.slice(j, j + 8));
+                        if (m) { j += m[0].length - 1; continue; }   // "(١)" — keep reading
+                        end = j; break;
+                    }
+                    if (')]\uFD3F\uFD3E{}<>«»'.includes(ch)) { end = j; break; }
                     if (!/[\u0600-\u06FF\s\u064B-\u065F\u0670]/.test(ch)) { end = j; break; }
                 }
                 const inner = text.substring(from, end).trim();
